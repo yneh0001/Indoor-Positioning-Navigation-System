@@ -1,27 +1,19 @@
+import sys
+
 from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegressor
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn import metrics
-from sklearn.preprocessing import MinMaxScaler
 from abc import ABCMeta
 from sklearn.svm import SVC, SVR
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-build_acc = []
-floor_acc = []
-
-long_scaler = MinMaxScaler()
-lat_scaler = MinMaxScaler()
 x = 1
 x2 = 1
 
+
 def Pre_Process(dataframe):
     # # PRE-PROCESS
-    # train_data_frame.drop_duplicates(subset=['ap', 'x', 'y', 'z'], inplace=True)
-    # # test_data_frame.drop_duplicates(subset=['ap', 'x', 'y', 'z'], inplace=True)
-    # train_data_frame = train_data_frame.dropna()
-
     A_list = []
     B_list = []
     C_list = []
@@ -65,76 +57,39 @@ def Pre_Process(dataframe):
             }
 
     new_df = pd.DataFrame(data)
-    print(new_df)
+    # print(new_df)
     return new_df
+
 
 def Load(path):
     train_data = pd.read_csv(path)
     test_data = pd.read_csv(path)
 
     # PRE-PROCESS
+    # drop duplications and empty
     train_data.drop_duplicates(subset=['ap', 'x', 'y', 'z'], inplace=True, keep='first')
     train_data = train_data.dropna()
-    #
+    # drop duplications and empty
     test_data.drop_duplicates(subset=['ap', 'x', 'y', 'z'], inplace=True, keep='last')
     test_data = test_data.dropna()
 
     train_data_frame = Pre_Process(train_data)
     test_data_frame = Pre_Process(test_data)
-    # test_data_frame = train_data_frame
-
     rest_data_frame = train_data_frame
-    valid_data_trame = pd.DataFrame(columns=train_data_frame.columns)
     valid_num = int(len(train_data_frame) / 10)
 
     sample_row = rest_data_frame.sample(valid_num)
     rest_data_frame = rest_data_frame.drop(sample_row.index)
 
-    valid_data_trame = pd.concat([valid_data_trame, sample_row])
     train_data_frame = rest_data_frame
 
     training_x = train_data_frame.to_numpy().T[:4].T
-    training_y = train_data_frame.to_numpy().T[[2, 3, 4], :].T
+    training_y = train_data_frame.to_numpy().T[[4, 5, 6], :].T
 
-    validation_x = valid_data_trame.to_numpy().T[:4].T
-    validation_y = valid_data_trame.to_numpy().T[[2, 3, 4], :].T
+    testing_x = test_data_frame.to_numpy().T[:4].T
+    testing_y = test_data_frame.to_numpy().T[[4, 5, 6], :].T
 
-    testing_x = test_data_frame.to_numpy().T[:4, 300:600].T
-    testing_y = test_data_frame.to_numpy().T[[2, 3, 4], 300:600].T
-
-    return training_x, training_y, validation_x, validation_y, testing_x, testing_y
-
-
-
-def normalize_x(x_array):
-    res = np.copy(x_array).astype(np.float)
-    for i in range(np.shape(res)[0]):
-        for j in range(np.shape(res)[1]):
-            if res[i][j] == 100:
-                res[i][j] = 0
-            else:
-                res[i][j] = -0.01 * res[i][j]
-    return res
-
-
-def normalize_y(longs, lats):
-    global long_scaler
-    global lat_scaler
-    longs = np.reshape(longs, [-1, 1])
-    lats = np.reshape(lats, [-1, 1])
-    long_scaler.fit(longs)
-    lat_scaler.fit(lats)
-    return np.reshape(long_scaler.transform(longs), [-1]), \
-           np.reshape(lat_scaler.transform(lats), [-1])
-
-
-def reverse_normalizeY(longs, lats):
-    global long_scaler
-    global lat_scaler
-    longs = np.reshape(longs, [-1, 1])
-    lats = np.reshape(lats, [-1, 1])
-    return np.reshape(long_scaler.inverse_transform(longs), [-1]), \
-           np.reshape(lat_scaler.inverse_transform(lats), [-1])
+    return training_x, training_y, testing_x, testing_y
 
 
 class Model(object):
@@ -146,55 +101,40 @@ class Model(object):
     floor_classifier = None
 
     # Training data
-    normalize_x = None
-    longitude_normalize_y = None
-    latitude_normalize_y = None
+    x = None
+    longitude_y = None
+    latitude_y = None
 
     def __init__(self):
         pass
 
     def _preprocess(self, x, y):
-        self.normalize_x = normalize_x(x)
+        self.x = x
         # remove nan
-        self.normalize_x = np.nan_to_num(self.normalize_x)
+        self.x = np.nan_to_num(self.x)
 
-        self.longitude_normalize_y, self.latitude_normalize_y = normalize_y(y[:, 0], y[:, 1])
+        self.longitude_y, self.latitude_y = y[:, 0], y[:, 1]
         # remove nan
-        self.longitude_normalize_y = np.nan_to_num(self.longitude_normalize_y)
-        self.latitude_normalize_y = np.nan_to_num(self.latitude_normalize_y)
+        self.longitude_y = np.nan_to_num(self.longitude_y)
+        self.latitude_y = np.nan_to_num(self.latitude_y)
 
         self.floorID_y = y[:, 2]
         self.floorID_y = np.nan_to_num(self.floorID_y)
-        # print(self.floorID_y)
-        # self.buildingID_y = y[:, 3]
 
     def fit(self, x, y):
         # Data pre-processing
         self._preprocess(x, y)
-        self.longitude_regression_model.fit(self.normalize_x, self.longitude_normalize_y)
-        self.latitude_regression_model.fit(self.normalize_x, self.latitude_normalize_y)
-        # print(np.isnan(self.normalize_x))
-        # print(np.isnan(self.floorID_y))
-        # print(np.isnan(self.floorID_y))
-        # print(np.isnan(self.floorID_y))
-        # print(self.floorID_y)
-        # self.floor_classifier.fit(self.normalize_x, self.floorID_y)
+        self.longitude_regression_model.fit(self.x, self.longitude_y)
+        self.latitude_regression_model.fit(self.x, self.latitude_y)
 
     def predict(self, x):
         # Testing
-        x = normalize_x(x)
         predict_longitude = self.longitude_regression_model.predict(x)
         predict_latitude = self.latitude_regression_model.predict(x)
-
-        # predict_floor = self.floor_classifier.predict(x)
-
-        # Reverse normalization
-        predict_longitude, predict_latitude = reverse_normalizeY(predict_longitude, predict_latitude)
 
         # Return the result
         res = np.concatenate((np.expand_dims(predict_longitude, axis=-1),
                               np.expand_dims(predict_latitude, axis=-1)), axis=-1)
-        # res = np.concatenate((res, np.expand_dims(predict_floor, axis=-1)), axis=-1)
         return res
 
     def error(self, x, y):
@@ -217,13 +157,13 @@ class SVM(Model):
         self.latitude_regression_model = SVR(verbose=True)
         self.floor_classifier = SVC(verbose=True)
 
+
 class RandomForest(Model):
     def __init__(self):
         super().__init__()
         self.longitude_regression_model = RandomForestRegressor()
         self.latitude_regression_model = RandomForestRegressor()
         self.floor_classifier = RandomForestClassifier()
-        # self.building_classifier = RandomForestClassifier()
 
 
 class GradientBoostingDecisionTree(Model):
@@ -232,7 +172,7 @@ class GradientBoostingDecisionTree(Model):
         self.longitude_regression_model = GradientBoostingRegressor()
         self.latitude_regression_model = GradientBoostingRegressor()
         self.floor_classifier = GradientBoostingClassifier()
-        # self.building_classifier = GradientBoostingClassifier()
+
 
 def plot_dist_error(dist):
     dist = dist.tolist()
@@ -250,10 +190,11 @@ def plot_dist_error(dist):
     global x
     fig.savefig("error" + str(x) + ".png")
     x += 1
-    if(x > 3):
+    if (x > 3):
         x = 1
     plt.legend()
     plt.show()
+
 
 def map_plot(_y, y):
     # take the first two features
@@ -279,28 +220,66 @@ def map_plot(_y, y):
     global x2
     plt.savefig('data_points' + str(x2) + '.png')
     x2 += 1
-    if(x2 > 3):
+    if (x2 > 3):
         x2 = 1
     plt.show()
 
 
+def managing_dataset_menu():
+    print("\n===========Main Menu===========")
+    print("1.Managing Dataset")
+    print("2.Quit")
+    print("\nPlease enter your choice: ")
+    choice = input()
+    if int(choice) == 1:
+        try:
+            print("\nPlease enter your dataset name with .csv extension: ")
+            path = input()
+            print("Loading dataset...")
+            # path = 'rssi.csv'
+            # Load(path)
+            train_x, train_y, test_x, test_y = Load(path)
+            print("Dataset loaded successfully!")
+
+            # call training
+            training_menu(train_x, train_y, test_x, test_y)
+
+        except:
+            print("Failure! Please check you have entered the correct input.")
+
+    else:
+        print("\nThank you!")
+
+def training_menu(train_x, train_y, test_x, test_y):
+    print("\n===========Training Menu===========")
+    print("1.Train Support Vector Machine")
+    print("2.Train Random Forest")
+    print("3.Train Gradient Boosting Decision Tree")
+    print("4.Quit")
+    print("\nPlease enter your choice: ")
+    choice2 = input()
+    if int(choice2) == 1:
+        # Training
+        SVM.fit(train_x, train_y)
+        SVM.error(test_x, test_y)
+        training_menu(train_x, train_y, test_x, test_y)
+
+    elif int(choice2) == 2:
+        RF.fit(train_x, train_y)
+        RF.error(test_x, test_y)
+        training_menu(train_x, train_y, test_x, test_y)
+
+    elif int(choice2) == 3:
+        GBDT.fit(train_x, train_y)
+        GBDT.error(test_x, test_y)
+        training_menu(train_x, train_y, test_x, test_y)
+    else:
+        print("\nThank you!")
+
+
 if __name__ == '__main__':
-    path = 'rssi.csv'
-    # Load(path)
-    train_x, train_y, valid_x, valid_y, test_x, test_y = Load(path)
-
-    # Training
-    print("\n===========SVM===========")
     SVM = SVM()
-    SVM.fit(train_x, train_y)
-    SVM.error(test_x, test_y)
-
-    print("\n===========RF===========")
     RF = RandomForest()
-    RF.fit(train_x, train_y)
-    RF.error(test_x, test_y)
-
-    print("\n===========GBD===========")
     GBDT = GradientBoostingDecisionTree()
-    GBDT.fit(train_x, train_y)
-    GBDT.error(test_x, test_y)
+
+    managing_dataset_menu();
